@@ -254,7 +254,7 @@ class CiscoWlcDriver(NetworkDriver):
         """
         Saves the config of the WLC, uses the paramiko save_config() function
         """
-        output = self.device.save_config()        
+        output = self.device.save_config()
         return output
 
 
@@ -279,7 +279,286 @@ class CiscoWlcDriver(NetworkDriver):
 
         return configs
 
-    def get_tacacs_summary(self):
+
+    def get_acl(self):
+        """Get the output of show acl summary and show acl layer2 summary
+        Returns:
+
+        {
+            "acl_l2": {
+                "acl": {
+                    "enabled": "yes|no"
+                }
+            }
+            "acl_ipv4": {
+                "acl": {
+                    "enabled": "yes|no"
+                }
+            },
+            "acl_ipv6": {
+                "acl": {
+                    "enabled": "yes|no"
+                }
+            }
+        }
+
+        """
+        show_acl_layer2_summary = self._send_command('show acl layer2 summary')
+        show_acl_summary = self._send_command('show acl summary')
+
+        acl = {}
+        key = ""
+
+        for l in show_acl_layer2_summary.splitlines() + show_acl_summary.splitlines():
+            if "Layer2 ACL Name" in l:
+                key = "acl_l2"
+                acl[key] = {}
+                continue
+            elif "IPv4 ACL Name" in l:
+                key = "acl_ipv4"
+                acl[key] = {}
+                continue
+            elif "IPv6 ACL Name" in l:
+                key = "acl_ipv6"
+                acl[key] = {}
+                continue
+
+            c = l.split()
+            if len(c) == 2 and c[-1] in ["Yes", "No"]:
+                acl[key].setdefault(c[0], {})
+                acl[key][c[0]]["enabled"] = c[-1]
+
+        return acl
+
+
+    def get_wlan(self):
+        """Get the output of:
+            show wlan summary
+            show wlan apgroups
+            show flexconnect summary
+
+        Returns:
+        {
+            "wlans": {
+                "total": <number>,
+                "<id>": {
+                    "id": "",
+                    "name": "",
+                    "interface": "",
+                    "status": "Enabled|Disabled"
+                }
+            },
+            "apgroups": {
+                "total": <number>,
+                "site-name": ""
+                "site-description": "",
+                "access-points": {
+                    "name": {
+                        "name": "",
+                        "slots": "",
+                        "model": "",
+                        "mac": "",
+                        "location": "",
+                        "port": "",
+                        "country": "",
+                        "priority": ""
+                    }
+                }
+            }
+        }
+        """
+        #show_wlan_summary = self._send_command('show wlan summary')
+        #show_wlan_apgroups = self._send_command('show wlan apgroups')
+        show_wlan_summary = """
+
+
+(Cisco Controller) >show wlan summary
+
+Number of WLANs.................................. 2
+
+WLAN ID  WLAN Profile Name / SSID               Status    Interface Name
+-------  -------------------------------------  --------  --------------------
+1        AC100 / AC100                          Enabled   management
+2        GUEST_WIRELESS / AtlasCopco            Enabled   management
+
+        """
+
+        show_wlan_apgroups = """
+
+(Cisco Controller) >show wlan apgroups
+
+Total Number of AP Groups........................ 1
+
+
+Site Name........................................ default-group
+Site Description................................. <none>
+NAS-identifier................................... none
+Client Traffic QinQ Enable....................... FALSE
+DHCPv4 QinQ Enable............................... FALSE
+AP Operating Class............................... Not-configured
+Capwap Prefer Mode............................... Not-configured
+Antenna Monitoring - Status...................... Disabled
+
+RF Profile
+----------
+2.4 GHz band..................................... <none>
+5 GHz band....................................... <none>
+
+WLAN ID          Interface          Network Admission Control          Radio Policy
+-------          -----------        --------------------------         ------------
+ 1               management           Disabled                          None
+ 2               management           Disabled                          None
+
+*AP3600 with 802.11ac Module will only advertise first 8 WLANs on 5GHz radios.
+
+
+ Lan Port configs
+ ----------------
+
+LAN          Status        POE          RLAN
+---          -------       ----         -----
+ 1           Disabled      Disabled     None
+ 2           Disabled                   None
+ 3           Disabled                   None
+
+ External 3G/4G module configs
+ -----------------------------
+
+LAN          Status        POE          RLAN
+---          -------       ----         -----
+ 1           Disabled                   None
+
+AP Name             Slots  AP Model             Ethernet MAC       Location          Port  Country  Priority
+------------------  -----  -------------------  -----------------  ----------------  ----  -------  --------
+SSINCA011WAP004      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:73:20               MDF  1     US       1
+SSINCA011WAP002      2     AIR-CAP2602I-A-K9    64:12:25:0b:0b:bd               MDF  1     US       1
+SSINCA011WAP003      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:73:42               MDF  1     US       1
+SSINCA011WAP001      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:72:bb               MDF  1     US       1
+
+
+        """
+
+        rexWLAN = re.compile("^(?P<ID>[0-9]+)\s+(?P<NAME>.*\S)\s+(?P<STATUS>Enabled|Disabled)\s+(?P<INTERFACE>\S+)$")
+        rexAP = re.compile("^(?P<NAME>\S+)\s+(?P<SLOTS>[0-9]+)\s+(?P<MODEL>\S+)\s+(?P<MAC>[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2})\s+(?P<LOCATION>.*)\s+(?P<PORT>[0-9]+)\s+(?P<COUNTRY>[A-Z]+)\s+(?P<PRIO>[0-9]+)$")
+
+        wlan = {
+            "wlans": {
+                "total": 0
+            },
+            "apgroups": {
+                "total": 0,
+                "site-name": None,
+                "site-description": None,
+                "access-points": {}
+            }
+        }
+
+        # wlans
+        for l in show_wlan_summary.splitlines():
+            if 'Number of WLAN' in l:
+                c = l.split()
+                wlan["wlans"]["total"] = int(c[-1])
+                continue
+            m = rexWLAN.match(l)
+            if m:
+                wlan["wlans"][m.groupdict()["ID"]] = {
+                    "id": m.groupdict()["ID"], 
+                    "name": m.groupdict()["NAME"], 
+                    "interface": m.groupdict()["INTERFACE"], 
+                    "status": m.groupdict()["STATUS"] 
+                }
+                continue
+
+        # ap groups
+        for l in show_wlan_apgroups.splitlines():
+            if 'Total Number of AP Groups' in l:
+                c = l.split()
+                wlan["apgroups"]["total"] = int(c[-1])
+                continue
+            if 'Site Name' in l:
+                c = l.split()
+                wlan["apgroups"]["site-name"] = c[-1]
+                continue
+            if 'Site Description' in l:
+                c = l.split()
+                wlan["apgroups"]["site-description"] = c[-1]
+                continue
+            m = rexAP.match(l)
+            if m:
+                wlan["apgroups"]["access-points"][m.groupdict()["NAME"]] = {
+                    "name": m.groupdict()["NAME"],
+                    "slots": m.groupdict()["SLOTS"],
+                    "model": m.groupdict()["MODEL"],
+                    "mac": m.groupdict()["MAC"],
+                    "location": m.groupdict()["LOCATION"],
+                    "port": m.groupdict()["PORT"],
+                    "country": m.groupdict()["COUNTRY"],
+                    "priority": m.groupdict()["PRIO"]
+                }
+
+        return wlan
+
+
+
+    def get_radius(self):
+        """Get the output of show radius summary
+
+        Returns a dictionary per server:
+        {
+            "server": {
+                "authentication": {
+                    "index": "",
+                    "server": "",
+                    "type": "",
+                    "port": "",
+                    "state": "",
+                    "tout": "",
+                    "mgmtout": "",
+                    "rfc3576": ""
+                },
+                "accounting": {
+                    "index": "",
+                    "server": "",
+                    "type": "",
+                    "port": "",
+                    "state": "",
+                    "tout": "",
+                    "mgmtout": "",
+                    "rfc3576": ""
+            }
+        }
+        """
+        show_radius_summary = self._send_command('show radius summary')
+
+        rexAAA = re.compile("^(?P<IDX>[0-9])\s+(?:\*)?\s+(?P<TYPE>\S+)\s+(?P<SERVER>\S+)\s+(?P<PORT>\S+)\s+(?P<STATE>\S+)\s+(?P<TOUT>\S+)\s+(?P<MGMTOUT>\S+)\s+(?P<RFC3576>\S+).*$")
+
+        radius = {}
+        aaa = ""
+
+        for line in show_radius_summary.splitlines():
+            if "Authentication Servers" in line:
+                aaa = "authentication"
+            elif "Accounting Servers" in line:
+                aaa = "accounting"
+            if not aaa:
+                continue
+            m = rexAAA.match(line)
+            if m:
+                radius.setdefault(m.groupdict()["SERVER"], {})
+                radius[m.groupdict()["SERVER"]][aaa] = {
+                        "index": m.groupdict()["IDX"],
+                        "server": m.groupdict()["TYPE"],
+                        "server": m.groupdict()["SERVER"],
+                        "port": m.groupdict()["PORT"],
+                        "state": m.groupdict()["STATE"],
+                        "tout": m.groupdict()["TOUT"],
+                        "mgmtout": m.groupdict()["MGMTOUT"],
+                        "rfc3576": m.groupdict()["RFC3576"],
+                   }
+
+        return radius
+
+    def get_tacacs(self):
         """Get the output of "show tacacs summary" for Cisco WLC.
         Returns a dictionary per server:
         {
@@ -313,11 +592,11 @@ class CiscoWlcDriver(NetworkDriver):
         """
         # get output from device
         show_tacacs_summary = self._send_command('show tacacs summary')
- 
+
         rexAAA = re.compile("^(?P<IDX>[0-9])\s+(?P<SERVER>\S+)\s+(?P<PORT>\S+)\s+(?P<STATE>\S+)\s+(?P<TOUT>\S+)\s+(?P<MGMTOUT>\S+).*$")
 
         tacacs = {}
-        aaa = ""        
+        aaa = ""
 
         for line in show_tacacs_summary.splitlines():
             if "Authentication Servers" in line:
@@ -341,4 +620,9 @@ class CiscoWlcDriver(NetworkDriver):
                    }
 
         return tacacs
+
+
+if __name__ == '__main__':
+    d = CiscoWlcDriver("test", "test", "test")
+    print(d.get_wlan())
 
