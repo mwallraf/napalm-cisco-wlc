@@ -30,6 +30,7 @@ from napalm.base.exceptions import (
 from napalm.base.utils import py23_compat
 from napalm.base.netmiko_helpers import netmiko_args
 import re
+import copy
 
 
 MINUTE_SECONDS = 60
@@ -341,58 +342,76 @@ class CiscoWlcDriver(NetworkDriver):
         {
             "wlans": {
                 "total": <number>,
-                "<id>": {
-                    "id": "",
-                    "name": "",
-                    "interface": "",
-                    "status": "Enabled|Disabled"
-                }
+                "wlans": [
+                    {
+                        "id": "",
+                        "name": "",
+                        "interface": "",
+                        "status": "Enabled|Disabled"
+                    }    
+                ]
             },
             "apgroups": {
                 "total": <number>,
-                "site-name": ""
-                "site-description": "",
-                "access-points": {
-                    "name": {
-                        "name": "",
-                        "slots": "",
-                        "model": "",
-                        "mac": "",
-                        "location": "",
-                        "port": "",
-                        "country": "",
-                        "priority": ""
+                "groups": [
+                    "site-name": ""
+                    "site-description": "",
+                    "access-points": [
+                        {
+                            "name": "",
+                            "slots": "",
+                            "model": "",
+                            "mac": "",
+                            "location": "",
+                            "port": "",
+                            "country": "",
+                            "priority": ""
+                        }
+                    ]
+                ]
+            }
+            "flexconnectgroups": {
+                "total": <number>,
+                "groups": [
+                    {
+                        "groupname": "",
+                        "apcount": ""
                     }
-                }
+                ]
             }
         }
         """
         #show_wlan_summary = self._send_command('show wlan summary')
         #show_wlan_apgroups = self._send_command('show wlan apgroups')
+        #show_flexconnect_group_summary = self._send_command('show flexconnect group summary')
+
         show_wlan_summary = """
-
-
 (Cisco Controller) >show wlan summary
 
-Number of WLANs.................................. 2
+Number of WLANs.................................. 3
 
-WLAN ID  WLAN Profile Name / SSID               Status    Interface Name
--------  -------------------------------------  --------  --------------------
-1        AC100 / AC100                          Enabled   management
-2        GUEST_WIRELESS / AtlasCopco            Enabled   management
+WLAN ID  WLAN Profile Name / SSID               Status    Interface Name        PMIPv6 Mobility
+-------  -------------------------------------  --------  --------------------  ---------------
+1        AC100 / AC100                          Enabled   management            none
+2        GUEST_WIRELESS / AtlasCopco            Enabled   management            none
+3        AC105 / AC105                          Enabled   management            none
 
-        """
+"""
 
         show_wlan_apgroups = """
-
+(Cisco Controller) >
+(Cisco Controller) >
 (Cisco Controller) >show wlan apgroups
 
-Total Number of AP Groups........................ 1
+Total Number of AP Groups........................ 2
 
 
-Site Name........................................ default-group
-Site Description................................. <none>
-NAS-identifier................................... none
+Site Name........................................ CHL001
+Site Description................................. CHL001WAPS
+Venue Group Code................................. Unspecified
+Venue Type Code.................................. Unspecified
+
+NAS-identifier................................... SSINCL001WLC001
 Client Traffic QinQ Enable....................... FALSE
 DHCPv4 QinQ Enable............................... FALSE
 AP Operating Class............................... Not-configured
@@ -405,9 +424,12 @@ RF Profile
 5 GHz band....................................... <none>
 
 WLAN ID          Interface          Network Admission Control          Radio Policy
+
+--More-- or (q)uit
 -------          -----------        --------------------------         ------------
  1               management           Disabled                          None
  2               management           Disabled                          None
+ 3               management           Disabled                          None
 
 *AP3600 with 802.11ac Module will only advertise first 8 WLANs on 5GHz radios.
 
@@ -428,28 +450,141 @@ LAN          Status        POE          RLAN
 ---          -------       ----         -----
  1           Disabled                   None
 
+--More-- or (q)uit
+
 AP Name             Slots  AP Model             Ethernet MAC       Location          Port  Country  Priority
 ------------------  -----  -------------------  -----------------  ----------------  ----  -------  --------
-SSINCA011WAP004      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:73:20               MDF  1     US       1
-SSINCA011WAP002      2     AIR-CAP2602I-A-K9    64:12:25:0b:0b:bd               MDF  1     US       1
-SSINCA011WAP003      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:73:42               MDF  1     US       1
-SSINCA011WAP001      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:72:bb               MDF  1     US       1
+SSINCL037WAP003      2     AIR-CAP2702I-A-K9    00:fe:c8:e8:19:44               MDF  1     US       1
+SSINCL037WAP802      2     AIR-CAP2702I-A-K9    cc:46:d6:ab:23:b4              IDF8  1     US       1
+SSINCL001WAP004      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:39:d0               MDF  1     US       1
+SSINCL037WAP302      2     AIR-CAP2702I-A-K9    fc:5b:39:77:ff:5c              IDF3  1     US       1
+SSINCL037WAP104      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:39:d4              IDF1  1     US       1
+SSINCL037WAP301      2     AIR-CAP2702I-A-K9    fc:5b:39:77:ff:30              IDF3  1     US       1
+SSINCL037WAP502      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:be:18              IDF5  1     US       1
+SSINCL001WAP003      2     AIR-CAP2702I-A-K9    fc:5b:39:d3:95:60               MDF  1     US       1
+SSINCL037WAP203      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:be:b0              IDF2  1     US       1
+SSINCL037WAP202      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:bb:f8              IDF2  1     US       1
+SSINCL037WAP101      2     AIR-CAP2702I-A-K9    fc:5b:39:d3:94:ec              IDF1  1     US       1
+SSINCL037WAP102      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:39:cc              IDF1  1     US       1
+SSINCL037WAP103      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:bd:cc              IDF1  1     US       1
+SSINCL001WAP401      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:bd:d4              IDF4  1     US       1
+SSINCL037WAP201      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:bb:ec              IDF2  1     US       1
+SSINCL037WAP001      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3a:1c               MDF  1     US       1
+SSINCL037WAP503      2     AIR-CAP2702I-A-K9    fc:5b:39:77:fe:0c              IDF5  1     US       1
+SSINCL037WAP501      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3b:3c              IDF5  1     US       1
+SSINCL037WAP002      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3b:40               MDF  1     US       1
+SSINCL030WAP001      2     AIR-CAP2702I-A-K9    fc:5b:39:77:fd:2c             CHL30  1     US       1
+SSINCL032WAP001      2     AIR-CAP2702I-A-K9    cc:46:d6:7f:95:8c            CHL032  1     US       1
+SSINCL033WAP001      2     AIR-CAP2702I-A-K9    cc:46:d6:f5:39:dc            CHL033  1     US       1
+SSINCL024WAP113      2     AIR-CAP2702I-A-K9    cc:46:d6:f5:38:a0              IDF1  1     US       1
+SSINCL028WAP009      2     AIR-AP2802I-A-K9     78:0c:f0:79:96:a4            CHL028  1     US       1
+SSINCL028WAP001      2     AIR-CAP2702I-A-K9    00:fe:c8:e8:1b:30            CHL028  1     US       1
 
+
+
+Site Name........................................ default-group
+Site Description................................. <none>
+NAS-identifier................................... none
+Client Traffic QinQ Enable....................... FALSE
+DHCPv4 QinQ Enable............................... FALSE
+AP Operating Class............................... Not-configured
+Capwap Prefer Mode............................... Not-configured
+Antenna Monitoring - Status...................... Disabled
+
+RF Profile
+----------
+2.4 GHz band..................................... <none>
+5 GHz band....................................... <none>
+
+WLAN ID          Interface          Network Admission Control          Radio Policy
+
+--More-- or (q)uit
+-------          -----------        --------------------------         ------------
+ 1               management           Disabled                          None
+ 2               management           Disabled                          None
+ 3               management           Disabled                          None
+
+*AP3600 with 802.11ac Module will only advertise first 8 WLANs on 5GHz radios.
+
+
+ Lan Port configs
+ ----------------
+
+LAN          Status        POE          RLAN
+---          -------       ----         -----
+ 1           Disabled      Disabled     None
+ 2           Disabled                   None
+ 3           Disabled                   None
+
+ External 3G/4G module configs
+ -----------------------------
+
+LAN          Status        POE          RLAN
+---          -------       ----         -----
+ 1           Disabled                   None
+
+--More-- or (q)uit
+
+AP Name             Slots  AP Model             Ethernet MAC       Location          Port  Country  Priority
+------------------  -----  -------------------  -----------------  ----------------  ----  -------  --------
+SSINCL037WAP204      2     AIR-CAP2702I-A-K9    cc:46:d6:ab:24:e8               MDF  1     US       1
+SSINCL001WAP701      2     AIR-CAP2702I-A-K9    fc:5b:39:77:fd:84  default location  1     US       1
+SSINCL006WAP001      2     AIR-CAP2702I-A-K9    00:fe:c8:e8:1a:9c  default location  1     US       1
+SSINCL029WAP001      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3b:bc  default location  1     US       1
+SSINCL035WAP002      2     AIR-CAP2702I-A-K9    cc:46:d6:7f:95:40               MDF  1     US       1
+SSINCL035WAP001      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:38:38               MDF  1     US       1
+SSINCL037WAP801      2     AIR-CAP2702I-A-K9    cc:46:d6:7f:95:ec              IDF8  1     US       1
+SSINCL032WAP002      2     AIR-CAP2702I-A-K9    cc:46:d6:ab:24:3c  default location  1     US       1
+SSINCL018WAP001      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:bb:98  default location  1     US       1
+SSINCL018WAP002      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3b:e4  default location  1     US       1
+SSINCL024WAP114      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3b:70              IDF1  1     US       1
+SSINCL024WAP104      2     AIR-CAP2702I-A-K9    fc:5b:39:77:fd:6c              IDF1  1     US       1
+SSINCL024WAP110      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:bc:b0              IDF1  1     US       1
+SSINCL024WAP108      2     AIR-CAP2702I-A-K9    fc:5b:39:77:ff:3c              IDF1  1     US       1
+SSINCL024WAP111      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3a:e0              IDF1  1     US       1
+SSINCL024WAP112      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3b:dc              IDF1  1     US       1
+SSINCL024WAP001      2     AIR-CAP2702I-A-K9    fc:5b:39:d3:95:4c               MDF  1     US       1
+SSINCL024WAP106      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:be:c4              IDF1  1     US       1
+SSINCL024WAP102      2     AIR-CAP2702I-A-K9    fc:5b:39:d3:94:20              IDF1  1     US       1
+SSINCL024WAP105      2     AIR-CAP2702I-A-K9    fc:5b:39:77:ff:44              IDF1  1     US       1
+SSINCL024WAP101      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3b:f8              IDF1  1     US       1
+SSINCL024WAP103      2     AIR-CAP2702I-A-K9    fc:5b:39:6e:ba:2c              IDF1  1     US       1
+SSINCL024WAP107      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:39:dc              IDF1  1     US       1
+SSINCL024WAP109      2     AIR-CAP2702I-A-K9    fc:5b:39:9a:3a:f0              IDF1  1     US       1
 
         """
 
-        rexWLAN = re.compile("^(?P<ID>[0-9]+)\s+(?P<NAME>.*\S)\s+(?P<STATUS>Enabled|Disabled)\s+(?P<INTERFACE>\S+)$")
+        show_flexconnect_group_summary = """
+(Cisco Controller) >show flexconnect group summary
+
+FlexConnect Group Summary: Count: 1
+Group Name            # Aps
+--------------------  --------
+
+default-flex-group                49
+        """
+
+        rexWLAN = re.compile("^(?P<ID>[0-9]+)\s+(?P<NAME>.*\S)\s+(?P<STATUS>Enabled|Disabled)\s+(?P<INTERFACE>\S+).*$")
         rexAP = re.compile("^(?P<NAME>\S+)\s+(?P<SLOTS>[0-9]+)\s+(?P<MODEL>\S+)\s+(?P<MAC>[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2}:[a-f0-9]{2})\s+(?P<LOCATION>.*)\s+(?P<PORT>[0-9]+)\s+(?P<COUNTRY>[A-Z]+)\s+(?P<PRIO>[0-9]+)$")
+        rexFLEX = re.compile("^(?P<NAME>.*\S)\s+(?P<APCOUNT>[0-9]+)$")
 
         wlan = {
             "wlans": {
-                "total": 0
+                "total": 0,
+                "wlans": []
             },
             "apgroups": {
                 "total": 0,
-                "site-name": None,
-                "site-description": None,
-                "access-points": {}
+                "groups": []
+                #"site-name": None,
+                #"site-description": None,
+                #"access-points": {
+                #    "total": 0
+                #}
+            },
+            "flexconnectgroups": {
+                "total": 0,
+                "groups": []
             }
         }
 
@@ -461,15 +596,17 @@ SSINCA011WAP001      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:72:bb               
                 continue
             m = rexWLAN.match(l)
             if m:
-                wlan["wlans"][m.groupdict()["ID"]] = {
-                    "id": m.groupdict()["ID"], 
-                    "name": m.groupdict()["NAME"], 
-                    "interface": m.groupdict()["INTERFACE"], 
-                    "status": m.groupdict()["STATUS"] 
-                }
+                wlan["wlans"]["wlans"].append({
+                    "id": m.groupdict()["ID"],
+                    "name": m.groupdict()["NAME"],
+                    "interface": m.groupdict()["INTERFACE"],
+                    "status": m.groupdict()["STATUS"]
+                })
                 continue
 
         # ap groups
+        apgroup = None
+        foundap = None
         for l in show_wlan_apgroups.splitlines():
             if 'Total Number of AP Groups' in l:
                 c = l.split()
@@ -477,15 +614,24 @@ SSINCA011WAP001      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:72:bb               
                 continue
             if 'Site Name' in l:
                 c = l.split()
-                wlan["apgroups"]["site-name"] = c[-1]
+                apgroup = { 
+                    "site-name": c[-1], 
+                    "site-description": "", 
+                    "access-points": {
+                        "total": 0,
+                        "access-points": []
+                    }
+                }
                 continue
             if 'Site Description' in l:
                 c = l.split()
-                wlan["apgroups"]["site-description"] = c[-1]
+                apgroup["site-description"] = c[-1]
                 continue
             m = rexAP.match(l)
-            if m:
-                wlan["apgroups"]["access-points"][m.groupdict()["NAME"]] = {
+            if apgroup and m:
+                foundap = True
+                apgroup["access-points"]["total"] += 1
+                apgroup["access-points"]["access-points"].append({
                     "name": m.groupdict()["NAME"],
                     "slots": m.groupdict()["SLOTS"],
                     "model": m.groupdict()["MODEL"],
@@ -494,7 +640,29 @@ SSINCA011WAP001      2     AIR-CAP2602I-A-K9    d0:72:dc:ef:72:bb               
                     "port": m.groupdict()["PORT"],
                     "country": m.groupdict()["COUNTRY"],
                     "priority": m.groupdict()["PRIO"]
-                }
+                })
+                continue
+            elif foundap and not l:
+                wlan["apgroups"]["groups"].append(copy.deepcopy(apgroup))
+                apgroup = None
+                foundap = False
+
+        # FLEXconnect groups
+        startcount = False
+        for l in show_flexconnect_group_summary.splitlines():
+            if 'Count:' in l:
+                c = l.split()
+                wlan["flexconnectgroups"]["total"] = int(c[-1])
+                continue
+            if 'Group Name' in l:
+                startcount = True
+                continue
+            m = rexFLEX.match(l)
+            if startcount and m:
+                wlan["flexconnectgroups"]["groups"].append({
+                    "name": m.groupdict()["NAME"], 
+                    "apcount": m.groupdict()["APCOUNT"]
+                })
 
         return wlan
 
