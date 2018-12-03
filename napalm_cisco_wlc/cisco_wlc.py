@@ -521,14 +521,21 @@ class CiscoWlcDriver(NetworkDriver):
         }
         """
         show_radius_summary = self._send_command('show radius summary')
+        configure_radius_max_index = self._send_command('config radius acct add ?')
+        print(configure_radius_max_index)
 
         rexAAA = re.compile("^(?P<IDX>[0-9]+)\s+(?:\*)?\s+(?P<TYPE>\S+)\s+(?P<SERVER>\S+)\s+(?P<PORT>\S+)\s+(?P<STATE>\S+)\s+(?P<TOUT>\S+)\s+(?P<MGMTOUT>\S+)\s+(?P<RFC3576>\S+).*$")
 
         radius = {
+            "max_index": None,
             "authentication": [],
             "accounting": []
         }
         aaa = ""
+
+        for line in configure_radius_max_index.splitlines():
+            if 'server index between' in line:
+                radius["max_index"] = line.split()[-1].replace(".", "")
 
         for line in show_radius_summary.splitlines():
             if "Authentication Servers" in line:
@@ -584,15 +591,22 @@ class CiscoWlcDriver(NetworkDriver):
         """
         # get output from device
         show_tacacs_summary = self._send_command('show tacacs summary')
+        configure_tacacs_max_index = self._send_command('config tacacs acct add ?')
+
 
         rexAAA = re.compile("^(?P<IDX>[0-9]+)\s+(?P<SERVER>\S+)\s+(?P<PORT>\S+)\s+(?P<STATE>\S+)\s+(?P<TOUT>\S+)\s+(?P<MGMTOUT>\S+).*$")
 
         tacacs = {
+            "max_index": None,
             "authentication": [],
             "authorization": [],
             "accounting": []
         }
         aaa = ""
+
+        for line in configure_tacacs_max_index.splitlines():
+            if 'server index between' in line:
+                tacacs["max_index"] = line.split()[-1].replace(".", "")
 
         for line in show_tacacs_summary.splitlines():
             if "Authentication Servers" in line:
@@ -620,5 +634,5 @@ class CiscoWlcDriver(NetworkDriver):
 if __name__ == '__main__':
     import json
     d = CiscoWlcDriver("test", "test", "test")
-    print(json.dumps(d.get_wlan(), indent=4))
+    print(json.dumps(d.get_radius(), indent=4))
 
