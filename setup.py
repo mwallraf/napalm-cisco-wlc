@@ -1,18 +1,27 @@
 """setup.py file."""
 
-import uuid
+import os
 
 from setuptools import setup, find_packages
-from pip.req import parse_requirements
 
 __author__ = 'David Barroso <dbarrosop@dravetech.com>'
 
-install_reqs = parse_requirements('requirements.txt', session=uuid.uuid1())
-reqs = [str(ir.req) for ir in install_reqs]
+def get_requirements():
+    reqs_path = os.path.join(
+        os.path.dirname(__file__),
+        'requirements.txt'
+    )
+    with open(reqs_path, 'r') as f:
+        reqs = [
+            r.strip() for r in f
+            if r.strip()
+        ]
+    return reqs
+
 
 setup(
     name="napalm-skeleton",
-    version="0.1.0",
+    version="0.1.1",
     packages=find_packages(),
     author="David Barroso",
     author_email="dbarrosop@dravetech.com",
@@ -27,5 +36,5 @@ setup(
     ],
     url="https://github.com/napalm-automation/napalm-skeleton",
     include_package_data=True,
-    install_requires=reqs,
+    install_requires=get_requirements(),
 )
