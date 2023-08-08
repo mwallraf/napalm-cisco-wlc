@@ -27,7 +27,6 @@ from napalm.base.exceptions import (
     ReplaceConfigException,
     CommandErrorException,
 )
-from napalm.base.utils import py23_compat
 from napalm.base.netmiko_helpers import netmiko_args
 import re
 import copy
@@ -178,19 +177,19 @@ class CiscoWlcDriver(NetworkDriver):
         return {
             'uptime': uptime,
             'vendor': vendor,
-            'product_name': py23_compat.text_type(product_name),
-            'serial_number': py23_compat.text_type(serial_number),
-            'model': py23_compat.text_type(model),
-            'hostname': py23_compat.text_type(hostname),
-            'os_version': py23_compat.text_type(product_version),
-            'management_ip': py23_compat.text_type(management_ip),
-            'configured_country': py23_compat.text_type(configured_country),
-            'configured_wlans': py23_compat.text_type(configured_wlans),
-            'active_clients': py23_compat.text_type(active_clients),
-            'mac_address': py23_compat.text_type(mac_address),
-            'max_ap_supported': py23_compat.text_type(max_ap_supported),
-            'uptime': py23_compat.text_type(uptime),
-            'chassis': py23_compat.text_type(chassis)
+            'product_name': product_name,
+            'serial_number': serial_number,
+            'model': model,
+            'hostname': hostname,
+            'os_version': product_version,
+            'management_ip': management_ip,
+            'configured_country': configured_country,
+            'configured_wlans': configured_wlans,
+            'active_clients': active_clients,
+            'mac_address': mac_address,
+            'max_ap_supported': max_ap_supported,
+            'uptime': uptime,
+            'chassis': chassis
         }
 
 
